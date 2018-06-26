@@ -1,5 +1,10 @@
 #![no_std]
 
+///
+/// Basic implementation of a Simple Protocol client for [Elatec
+/// TWN4](https://www.elatec-rfid.com/en/products/rfid-readerwriter-with-antenna/multi-frequency/twn4-multitech/)
+/// family devices, based upon [embedded-hal](https://github.com/japaric/embedded-hal).
+
 #[macro_use]
 extern crate bitflags;
 extern crate byteorder;
@@ -14,23 +19,32 @@ use hal::serial;
 
 mod hex;
 
+/// Run modes for the reader
 pub mod mode {
+    /// The reader is active and ready to take commands
     pub struct Run;
+    /// The reader is in a low-power state and can be awoken by LPCD, incoming data, or timeout
     pub struct Sleep;
+    /// (Unimplemented) The reader is stopped, and can be awoken by incoming data.
     pub struct Stop;
 }
 
 #[derive(Debug)]
+/// Elatec Multitech3-based RFID card reader
 pub struct Multitech3<RX, TX, MODE>
 where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
 {
+    /// RX serial pin
     rx: RX,
+    /// TX serial pin
     tx: TX,
+    #[doc(hidden)]
     _mode: PhantomData<MODE>,
 }
 
+/// Create a new instance of the reader accessed via the provided pins.
 pub fn new<RX, TX>(rx: RX, tx: TX) -> Multitech3<RX, TX, mode::Run>
 where
     RX: serial::Read<u8>,
@@ -48,24 +62,28 @@ where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
 {
-    fn read_char(&mut self) -> Result<u8, Error> {
+    /// Execute a blocking read of a single byte from the serial port
+    fn read_byte(&mut self) -> Result<u8, Error> {
         match block!(self.rx.read()) {
             Ok(c) => Ok(c),
             Err(_e) => Err(Error::Read),
         }
     }
 
+    /// Execute a blocking read of a ASCII hex-encoded byte (i.e. two bytes) from the serial port
     fn read_hex_byte(&mut self) -> Result<u8, Error> {
-        match hex::hex_byte_to_byte(self.read_char()?, self.read_char()?) {
+        match hex::hex_byte_to_byte(self.read_byte()?, self.read_byte()?) {
             Ok(b) => Ok(b),
             Err(e) => Err(Error::Hex(e)),
         }
     }
 
+    /// Read and return the status of the last operation
     fn read_err(&mut self) -> Result<ReaderError, Error> {
         Ok(ReaderError::from(self.read_hex_byte()?))
     }
 
+    /// Read the status of the last operation and save the rest of the line in `buf`
     fn read_resp(&mut self, buf: &mut [u8]) -> Result<ReaderError, Error> {
         let err = self.read_err()?;
         match err {
@@ -98,6 +116,7 @@ where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
 {
+    /// Read the results of the sleep operation and return a running reader object
     pub fn into_running(
         mut self,
     ) -> Result<(Multitech3<RX, TX, mode::Run>, WakeReason), (Self, Error)> {
@@ -131,6 +150,7 @@ where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
 {
+    /// Write the commands to the serial port
     fn issue_cmd<C: SimpleCmd>(&mut self, buf: &mut [u8], cmd: &C) -> Result<(), Error> {
         let sz = cmd.get_cmd_hex(buf)?;
         self.write_buf(&buf[..sz])?;
@@ -138,6 +158,7 @@ where
         Ok(())
     }
 
+    /// Write the entire contents of `buf` to the serial port
     fn write_buf(&mut self, buf: &[u8]) -> Result<(), Error> {
         for c in buf.iter() {
             match block!(self.tx.write(*c)) {
@@ -148,11 +169,13 @@ where
         Ok(())
     }
 
+    /// Reset the reader; does not return a status
     pub fn reset(&mut self) -> Result<(), Error> {
         let cmd = commands::Reset;
         self.issue_cmd(&mut [0u8; commands::Reset::CMD_LEN], &cmd)
     }
 
+    /// Put the reader to sleep; will wake on low-power card detect or timeout
     pub fn sleep(mut self, dur: Duration) -> Result<Multitech3<RX, TX, mode::Sleep>, Error> {
         let sleep_cmd = commands::Sleep {
             period: dur,
@@ -169,6 +192,7 @@ where
         }
     }
 
+    /// Return the number of ticks the reader has been powered on
     pub fn get_sys_ticks(&mut self) -> Result<u32, Error> {
         const RESP_LEN: usize = 8;
         let mut resp_buf = [0u8; RESP_LEN];
@@ -185,6 +209,7 @@ where
         }
     }
 
+    /// Return the reader version string in `buf`
     pub fn get_version_string(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         let cmd = commands::GetVersionString {
             max_resp_len: core::cmp::min(0xFF as usize, buf.len()) as u16,
@@ -201,6 +226,13 @@ where
         }
     }
 
+    /// Execute a tag read operation and return the tag type and ID in `buf`
+    ///
+    /// This does no parsing of the tag information except to strip out TLV-esqe data sent during
+    /// transmission. The data is returned in the form:
+    /// ```
+    /// [type: u8] [id_bit_cnt: u8] [tag_id: u8|...]
+    /// ```
     pub fn search_tag(&mut self, buf: &mut [u8]) -> Result<Option<usize>, Error> {
         let cmd = commands::SearchTag;
         match self.issue_cmd(&mut [0u8; commands::SearchTag::CMD_LEN], &cmd) {
@@ -256,32 +288,53 @@ where
 }
 
 #[derive(Debug)]
+/// Exceptions occurring during reader operations
 pub enum Error {
+    /// The reader issued a response that could not be processed as expected
     BadResponse(usize),
+    /// The provided buffer was filled but more data awaits
     BufferFull,
     /// The supplied buffer is too small - the inner value is the required size
     BufferTooSmall(usize),
+    /// A read of the serial port failed
+    ///
+    /// TODO make this properly bubble up <RX as hal::serial::Read>::Error somehow
     Read,
+    /// A write to the serial port failed
     Write,
+    /// The reader is still asleep and no bytes were waiting
     StillAsleep,
+    /// An unspecified error occurred
     Other,
+    /// The requested function is unimplemented
     Unimplemented,
+    /// Communication with the reader succeeded, but the reader returned an error
     Reader(ReaderError),
+    /// An attempt to manipulate hex bytes failed
     Hex(hex::Error),
 }
 
 #[derive(Debug)]
+/// Error responses returned by the reader
 pub enum ReaderError {
+    /// ERR_NONE; the inner value contains the number of subsequent bytes read
     None(usize),
+    /// ERR_UNKNOWN_FUNCTION
     UnknownFunction,
+    /// ERR_MISSING_PARAMETER
     MissingParameter,
+    /// ERR_UNUSED_PARAMETERS
     UnusedParameters,
+    /// ERR_INVALID_FUNCTION
     InvalidFunction,
+    /// ERR_PARSER
     Parser,
+    /// Unknown/unrecognized; the inner value contains the (hex-decoded) error value
     Unknown(u8),
 }
 
 impl From<u8> for ReaderError {
+    /// Convert a hex-decoded byte response into a ReaderError
     fn from(code: u8) -> Self {
         match code {
             0 => ReaderError::None(0),
@@ -296,12 +349,14 @@ impl From<u8> for ReaderError {
 }
 
 impl From<hex::Error> for Error {
+    /// Turn a hex conversion error into an Error
     fn from(e: hex::Error) -> Self {
         Error::Hex(e)
     }
 }
 
 impl From<nb::Error<Error>> for Error {
+    /// Convert an `nb::Error` into an Error
     fn from(e: nb::Error<Error>) -> Error {
         match e {
             nb::Error::Other(e) => e,
@@ -328,6 +383,7 @@ pub enum WakeReason {
 }
 
 impl From<u8> for WakeReason {
+    /// Convert a hex-decoded sleep wake-up reason code into a WakeReason
     fn from(n: u8) -> Self {
         match n {
             1 => WakeReason::USB,
@@ -364,16 +420,22 @@ mod commands {
         }
     }
 
+    /// Simple protocol commands
     pub trait SimpleCmd {
+        /// The maximum length of a simple command in hex-encoded bytes
         const CMD_LEN: usize;
+        /// The type of value returned in the parsed command response
         type Response;
 
+        /// Retrieve hex-encoded command bytes to be sent to the reader into `buf`
         fn get_cmd_hex(&self, buf: &mut [u8]) -> Result<usize, Error>;
+        /// Parse the hex-encoded response (excl. response code) in `buf`
         fn parse_response(&self, _buf: &mut [u8]) -> Result<Self::Response, Error> {
             Err(Error::Unimplemented)
         }
     }
 
+    /// Reset the firmware (including any running App)
     pub struct Reset;
 
     impl SimpleCmd for Reset {
@@ -388,6 +450,7 @@ mod commands {
     }
 
     bitflags! {
+        /// Sleep mode flags used in the sleep command
         pub struct SleepFlags: u32 {
             const WAKEUP_BY_USB_MSK = 0x1;
             const WAKEUP_BY_COM1_MSK = 0x2;
@@ -399,6 +462,9 @@ mod commands {
         }
     }
 
+    /// The device enters the sleep state for a specified time.
+    ///
+    /// During sleep state, the device reduces the current consumption to a value, which depends on the mode of sleep.
     pub struct Sleep {
         pub period: Duration,
         pub flags: SleepFlags,
@@ -424,6 +490,7 @@ mod commands {
         }
     }
 
+    /// Retrieve number of system ticks, specified in multiple of 1 milliseconds, since startup of the firmware.
     pub struct GetSysTicks;
 
     impl SimpleCmd for GetSysTicks {
@@ -448,6 +515,7 @@ mod commands {
         }
     }
 
+    /// Retrieve version information.
     pub struct GetVersionString {
         pub max_resp_len: u16,
     }
@@ -480,6 +548,11 @@ mod commands {
         }
     }
 
+    /// Use this function to search a transponder in the reading range of TWN4.
+    ///
+    /// TWN4 is searching for all types of transponders, which have been specified via function
+    /// SetTagTypes (unimplemented in this library). If a transponder has been found, tag type,
+    /// length of ID and ID data itself are returned.
     pub struct SearchTag;
 
     impl SimpleCmd for SearchTag {

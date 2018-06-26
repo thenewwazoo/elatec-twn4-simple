@@ -1,7 +1,12 @@
 [package]
 authors = ["Brandon Matthews <bmatthews@zipcar.com>"]
-name = "elatec-multitec-nano-simple"
+name = "elatec-twn4-simple"
+description = "embedded-hal implementation of an Elatec TWN4 Simple Protocol client"
 version = "0.1.0"
+categories = ["embedded", "hardware-support", "no-std"]
+keywords = ["arm", "cortex-m", "stm32l0x1", "hal"]
+license = "0BSD"
+repository = "https://github.com/thenewwazoo/elatec-twn4-simple"
 
 [dependencies]
 bitflags = "1.0.3"
