@@ -98,7 +98,7 @@ where
                         Ok(c) => c,
                         Err(_e) => return Err(Error::Read),
                     };
-                    if c == '\r' as u8 {
+                    if c == b'\r' {
                         break;
                     }
                     buf[i] = c;
@@ -154,7 +154,7 @@ where
     fn issue_cmd<C: SimpleCmd>(&mut self, buf: &mut [u8], cmd: &C) -> Result<(), Error> {
         let sz = cmd.get_cmd_hex(buf)?;
         self.write_buf(&buf[..sz])?;
-        self.write_buf("\r".as_bytes())?;
+        self.write_buf(b"\r")?;
         Ok(())
     }
 
@@ -444,7 +444,7 @@ mod commands {
 
         fn get_cmd_hex(&self, buf: &mut [u8]) -> Result<usize, Error> {
             check_bufsz(Reset::CMD_LEN, buf)?;
-            copy_all_bytes(buf, "0001".as_bytes());
+            copy_all_bytes(buf, b"0001");
             Ok(2)
         }
     }
@@ -477,7 +477,7 @@ mod commands {
         fn get_cmd_hex(&self, buf: &mut [u8]) -> Result<usize, Error> {
             check_bufsz(Sleep::CMD_LEN, buf)?;
 
-            copy_all_bytes(buf, "0007".as_bytes());
+            copy_all_bytes(buf, b"0007");
             let mut u32_buf = [0u8; 4];
             LittleEndian::write_u32(
                 &mut u32_buf,
@@ -500,7 +500,7 @@ mod commands {
         fn get_cmd_hex(&self, buf: &mut [u8]) -> Result<usize, Error> {
             check_bufsz(GetSysTicks::CMD_LEN, buf)?;
 
-            copy_all_bytes(buf, "0003".as_bytes());
+            copy_all_bytes(buf, b"0003");
             Ok(GetSysTicks::CMD_LEN)
         }
 
@@ -526,7 +526,7 @@ mod commands {
 
         fn get_cmd_hex(&self, buf: &mut [u8]) -> Result<usize, Error> {
             check_bufsz(GetVersionString::CMD_LEN, buf)?;
-            copy_all_bytes(buf, "0004".as_bytes());
+            copy_all_bytes(buf, b"0004");
             hex::bytes_to_hex(&[0xFFu8], &mut buf[4..])?;
             Ok(GetVersionString::CMD_LEN)
         }
@@ -561,7 +561,7 @@ mod commands {
 
         fn get_cmd_hex(&self, buf: &mut [u8]) -> Result<usize, Error> {
             check_bufsz(SearchTag::CMD_LEN, buf)?;
-            copy_all_bytes(buf, "0500".as_bytes());
+            copy_all_bytes(buf, b"0500");
             hex::bytes_to_hex(&[0xFFu8], &mut buf[4..])?;
             Ok(SearchTag::CMD_LEN)
         }

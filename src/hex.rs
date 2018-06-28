@@ -8,21 +8,21 @@ pub enum Error {
 
 pub fn half_byte_to_hex(i: u8) -> u8 {
     match i & 0xF {
-        0xA => 'A' as u8,
-        0xB => 'B' as u8,
-        0xC => 'C' as u8,
-        0xD => 'D' as u8,
-        0xE => 'E' as u8,
-        0xF => 'F' as u8,
-        _ => '0' as u8 + i,
+        0xA => b'A',
+        0xB => b'B',
+        0xC => b'C',
+        0xD => b'D',
+        0xE => b'E',
+        0xF => b'F',
+        _ => b'0' + i,
     }
 }
 
 pub fn hex_to_half_byte(c: u8) -> Result<u8, Error> {
-    if c >= '0' as u8 && c <= '9' as u8 {
-        Ok(c - '0' as u8)
-    } else if c >= 'A' as u8 && c <= 'F' as u8 {
-        Ok(c - 'A' as u8 + 0xA)
+    if c >= b'0' && c <= b'9' {
+        Ok(c - b'0')
+    } else if c >= b'A' && c <= b'F' {
+        Ok(c - b'A' + 0xA)
     } else {
         Err(Error::BadChar)
     }
