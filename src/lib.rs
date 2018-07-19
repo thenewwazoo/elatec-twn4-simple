@@ -176,11 +176,10 @@ where
     }
 
     /// Put the reader to sleep; will wake on low-power card detect or timeout
-    pub fn sleep(mut self, dur: Duration) -> Result<Multitech3<RX, TX, mode::Sleep>, Error> {
+    pub fn sleep(mut self, dur: Duration, opts: commands::SleepFlags) -> Result<Multitech3<RX, TX, mode::Sleep>, Error> {
         let sleep_cmd = commands::Sleep {
             period: dur,
-            flags: commands::SleepFlags::WAKEUP_BY_TIMEOUT_MSK
-                | commands::SleepFlags::WAKEUP_BY_LPCD_MSK,
+            flags: opts,
         };
         match self.issue_cmd(&mut [0u8; commands::Sleep::CMD_LEN], &sleep_cmd) {
             Ok(_) => Ok(Multitech3::<RX, TX, mode::Sleep> {
@@ -479,10 +478,12 @@ mod commands {
 
             copy_all_bytes(buf, b"0007");
             let mut u32_buf = [0u8; 4];
-            LittleEndian::write_u32(
-                &mut u32_buf,
-                self.period.as_secs() as u32 * 1000 + self.period.subsec_millis(),
-            );
+            if self.period != Duration::new(0, 0) {
+                LittleEndian::write_u32(
+                    &mut u32_buf,
+                    self.period.as_secs() as u32 * 1000 + self.period.subsec_millis(),
+                    );
+            }
             hex::bytes_to_hex(&u32_buf, &mut buf[4..12])?;
             LittleEndian::write_u32(&mut u32_buf, self.flags.bits());
             hex::bytes_to_hex(&u32_buf, &mut buf[12..20])?;
@@ -567,3 +568,5 @@ mod commands {
         }
     }
 }
+
+pub use commands::SleepFlags;
