@@ -17,7 +17,7 @@ use core::marker::PhantomData;
 use core::time::Duration;
 use hal::serial;
 
-mod hex;
+pub mod hex;
 
 /// Run modes for the reader
 pub mod mode {
@@ -229,9 +229,9 @@ where
     ///
     /// This does no parsing of the tag information except to strip out TLV-esqe data sent during
     /// transmission. The data is returned in the form:
-    /// ```
-    /// [type: u8] [id_bit_cnt: u8] [tag_id: u8|...]
-    /// ```
+    ///
+    /// > `[type: u8] [id_bit_cnt: u8] [tag_id: u8|...]`
+    ///
     pub fn search_tag(&mut self, buf: &mut [u8]) -> Result<Option<usize>, Error> {
         let cmd = commands::SearchTag;
         match self.issue_cmd(&mut [0u8; commands::SearchTag::CMD_LEN], &cmd) {

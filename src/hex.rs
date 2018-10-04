@@ -7,14 +7,24 @@ pub enum Error {
 }
 
 pub fn half_byte_to_hex(i: u8) -> u8 {
-    match i & 0xF {
-        0xA => b'A',
-        0xB => b'B',
-        0xC => b'C',
-        0xD => b'D',
-        0xE => b'E',
-        0xF => b'F',
-        _ => b'0' + i,
+    let h = i & 0xF;
+    if h < 0xA {
+        b'0' + h
+    } else {
+        b'A' + (h - 0xA)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn half_byte_to_hex_test() {
+        assert_eq!(half_byte_to_hex(0xF), b'F');
+        assert_eq!(half_byte_to_hex(0x0), b'0');
+        assert_eq!(half_byte_to_hex(0x9), b'9');
+        assert_eq!(half_byte_to_hex(0xA), b'A');
     }
 }
 
