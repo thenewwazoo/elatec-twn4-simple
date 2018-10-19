@@ -1,9 +1,8 @@
+//! Basic implementation of a Simple Protocol client for [Elatec
+//! TWN4](https://www.elatec-rfid.com/en/products/rfid-readerwriter-with-antenna/multi-frequency/twn4-multitech/)
+//! family devices, based upon [embedded-hal](https://github.com/japaric/embedded-hal).
 #![no_std]
-
-///
-/// Basic implementation of a Simple Protocol client for [Elatec
-/// TWN4](https://www.elatec-rfid.com/en/products/rfid-readerwriter-with-antenna/multi-frequency/twn4-multitech/)
-/// family devices, based upon [embedded-hal](https://github.com/japaric/embedded-hal).
+#![deny(missing_docs)]
 
 #[macro_use]
 extern crate bitflags;
@@ -395,12 +394,6 @@ impl From<u8> for WakeReason {
     }
 }
 
-pub struct TagInfo<'i> {
-    pub tag_type: u8,
-    pub id_bit_count: u8,
-    pub id: &'i [u8],
-}
-
 mod commands {
     use super::hex;
     use super::Error;
@@ -451,12 +444,19 @@ mod commands {
     bitflags! {
         /// Sleep mode flags used in the sleep command
         pub struct SleepFlags: u32 {
+            /// Wake up on USB activity
             const WAKEUP_BY_USB_MSK = 0x1;
+            /// Wake up on COM1 activity
             const WAKEUP_BY_COM1_MSK = 0x2;
+            /// Wake up on COM2 activity
             const WAKEUP_BY_COM2_MSK = 0x4;
+            /// Wake up after timeout
             const WAKEUP_BY_TIMEOUT_MSK = 0x10;
+            /// Wake up on low-power card detect
             const WAKEUP_BY_LPCD_MSK = 0x20;
+            /// Enter sleep mode
             const SLEEPMODE_SLEEP = 0x0000;
+            /// Enter stop mode
             const SLEEPMODE_STOP = 0x0100;
         }
     }
