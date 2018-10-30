@@ -10,13 +10,11 @@ extern crate byteorder;
 #[macro_use(block)]
 extern crate nb;
 extern crate embedded_hal as hal;
+extern crate simple_hex as hex;
 
 use commands::SimpleCmd;
-use core::marker::PhantomData;
 use core::time::Duration;
 use hal::serial;
-
-pub mod hex;
 
 /// Run modes for the reader
 pub mod mode {
@@ -30,7 +28,7 @@ pub mod mode {
 
 #[derive(Debug)]
 /// Elatec Multitech3-based RFID card reader
-pub struct Multitech3<RX, TX, MODE>
+pub struct Multitech3<RX, TX>
 where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
@@ -39,24 +37,21 @@ where
     rx: RX,
     /// TX serial pin
     tx: TX,
-    #[doc(hidden)]
-    _mode: PhantomData<MODE>,
 }
 
 /// Create a new instance of the reader accessed via the provided pins.
-pub fn new<RX, TX>(rx: RX, tx: TX) -> Multitech3<RX, TX, mode::Run>
+pub fn new<RX, TX>(rx: RX, tx: TX) -> Multitech3<RX, TX>
 where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
 {
-    Multitech3::<RX, TX, mode::Run> {
+    Multitech3::<RX, TX> {
         rx,
         tx,
-        _mode: PhantomData,
     }
 }
 
-impl<RX, TX, MODE> Multitech3<RX, TX, MODE>
+impl<RX, TX> Multitech3<RX, TX>
 where
     RX: serial::Read<u8>,
     TX: serial::Write<u8>,
@@ -108,17 +103,11 @@ where
             _ => Err(Error::Reader(err)),
         }
     }
-}
 
-impl<RX, TX> Multitech3<RX, TX, mode::Sleep>
-where
-    RX: serial::Read<u8>,
-    TX: serial::Write<u8>,
-{
     /// Read the results of the sleep operation and return a running reader object
     pub fn into_running(
         mut self,
-    ) -> Result<(Multitech3<RX, TX, mode::Run>, WakeReason), (Self, Error)> {
+    ) -> Result<(Multitech3<RX, TX>, WakeReason), (Self, Error)> {
         let mut resp_buf = [0u8; 2];
         match self.read_resp(&mut resp_buf) {
             Ok(resp) => match resp {
@@ -129,10 +118,9 @@ where
                     };
 
                     Ok((
-                        Multitech3::<RX, TX, mode::Run> {
+                        Multitech3::<RX, TX> {
                             rx: self.rx,
                             tx: self.tx,
-                            _mode: PhantomData,
                         },
                         WakeReason::from(reason_code),
                     ))
@@ -142,13 +130,7 @@ where
             Err(e) => Err((self, e)),
         }
     }
-}
 
-impl<RX, TX> Multitech3<RX, TX, mode::Run>
-where
-    RX: serial::Read<u8>,
-    TX: serial::Write<u8>,
-{
     /// Write the commands to the serial port
     fn issue_cmd<C: SimpleCmd>(&mut self, buf: &mut [u8], cmd: &C) -> Result<(), Error> {
         let sz = cmd.get_cmd_hex(buf)?;
@@ -175,16 +157,15 @@ where
     }
 
     /// Put the reader to sleep; will wake on low-power card detect or timeout
-    pub fn sleep(mut self, dur: Duration, opts: commands::SleepFlags) -> Result<Multitech3<RX, TX, mode::Sleep>, Error> {
+    pub fn sleep(mut self, dur: Duration, opts: commands::SleepFlags) -> Result<Multitech3<RX, TX>, Error> {
         let sleep_cmd = commands::Sleep {
             period: dur,
             flags: opts,
         };
         match self.issue_cmd(&mut [0u8; commands::Sleep::CMD_LEN], &sleep_cmd) {
-            Ok(_) => Ok(Multitech3::<RX, TX, mode::Sleep> {
+            Ok(_) => Ok(Multitech3::<RX, TX> {
                 rx: self.rx,
                 tx: self.tx,
-                _mode: PhantomData,
             }),
             Err(e) => Err(e),
         }

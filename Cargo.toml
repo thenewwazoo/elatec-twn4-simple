@@ -13,3 +13,4 @@ bitflags = "1.0.3"
 byteorder = { version = "1.2.3", default_features = false }
 embedded-hal = "0.2.1"
 nb = "0.1.1"
+simple-hex = { path = "../simple-hex/", version = "0.1.0" }
